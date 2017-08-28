@@ -1,0 +1,86 @@
+---
+title: "Machine Learning Course Project"
+author: "Zelepukin Dmitriy"
+date: "29 august 2017"
+output:
+  html_document: default
+---
+The goal of this project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. 
+
+#Load libraries and data sets
+
+```{r setup, include=TRUE, message=FALSE, error=FALSE, warning=FALSE}
+library(dplyr)
+library(rpart)
+library(gbm)
+
+# Loading Data
+
+training <- read.csv('pml-training.csv', stringsAsFactors=F, na.strings = c("NA", "", "#DIV/0!"))
+testing <- read.csv('pml-testing.csv', stringsAsFactors=F, na.strings = c("NA", "", "#DIV/0!"))
+
+# Data Cleaning
+
+# Remove variables in the training set with too much NAs 
+goodCol <- colSums(is.na(training)) < 1900
+myTraining <- training[ , goodCol][ , ]
+
+# Remove the same columns in the test set
+myTesting <- testing[ , goodCol][ , ]
+
+# Remove the first seven columns in both sets
+myTraining <- myTraining[ , -(1:7)]
+myTesting <- myTesting[ , -(1:7)] 
+```
+
+# Subsetting the training data
+
+In building our model, for a cross validation objective, we subset our training data to a real training set and a test set.
+
+```{r subs, warning=FALSE, message=FALSE, error=FALSE}
+# Create inTraining and inTesting
+library(caret)
+set.seed(4848)
+inTrain <- createDataPartition(y = myTraining$classe, p = 0.75, list = FALSE)
+inTraining <- myTraining[inTrain, ]
+inTesting <- myTraining[-inTrain, ]
+```
+
+# Model building with  'randomForest' package:
+---------------
+```{r rf}
+# Train with randomForest
+library(randomForest)
+inTraining$classe <- as.factor(inTraining$classe)
+set.seed(555)
+rfGrid <-  expand.grid(interaction.depth = c(1, 5, 9),
+                        n.trees = (1:30)*50,
+                        shrinkage = 0.1)
+modelFit <- randomForest(classe ~., data = inTraining, tuneGrid = rfGrid) 
+print(modelFit)
+plot(modelFit)
+```
+
+#Cross validation
+
+```{r val}
+# Test "out of sample"
+predictions <- predict(modelFit, newdata = inTesting)
+confusionMatrix(predictions, inTesting$classe)
+```
+
+#Final validation: 
+
+```{r check}
+# Test validation sample
+answers <- predict(modelFit, newdata = myTesting, type = "response")
+print(answers)
+```
+
+#Conclusion
+
+Based on the data available, I am able to fit a reasonably sound model with a high degree of accuracy in predicting out of sample observations. One assumption that I used in this work that could be relaxed in future work would be to remove the section of data preparation where I limit features to those that are non-zero in the validation sample. For example, when fitting a model on all training data columns, some features that are all missing in the validation sample do included non-zero items in the training sample and are used in the decision tree models.
+
+The question I’m left with is around the data collection process. Why are there so many features in the validation sample that are missing for all 20 observations, but these have observations in the training sample? Is this just introduced by the Coursera staff for the project to see how students respond? Or is it a genuine aspect of how data is collected from these wearable technologies?
+
+Despite these remaining questions on missing data in the samples, the random forest model with cross-validation produces a surprisingly accurate model that is sufficient for predictive analytics.
